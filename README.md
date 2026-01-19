@@ -79,3 +79,107 @@ GBSA file generation completed successfully!
 
 - Python 3.6 or higher
 - No external dependencies required
+
+## strip_trajectories.py
+
+A Python script that performs trajectory stripping for molecular dynamics analysis using cpptraj.
+
+### Purpose
+
+This script searches for mutation directories containing MMGBSA files (specifically looking for `analysis/gbsa/` directories), locates the required topology (prmtop) and trajectory (NetCDF) files, and generates cpptraj input files along with SLURM batch scripts to strip specific frames (825-850) from the trajectories. The script also reports the total number of frames in each trajectory after the stripping process is complete.
+
+### Usage
+
+```bash
+cd /path/to/your/project
+python3 strip_trajectories.py
+```
+
+Or make it executable and run directly:
+
+```bash
+chmod +x strip_trajectories.py
+./strip_trajectories.py
+```
+
+### Features
+
+- **Automatic discovery**: Finds all mutation directories with MMGBSA structure (`analysis/gbsa/`)
+- **File detection**: Automatically locates prmtop and NetCDF trajectory files
+- **Frame extraction**: Strips frames 825-850 (inclusive) from trajectories
+- **SLURM integration**: Generates and submits SLURM batch scripts for processing
+- **Frame counting**: Reports total number of frames in each trajectory
+- **Logging**: Provides detailed output about file creation and job submissions
+- **Standard library only**: Uses only Python standard libraries (no external dependencies)
+- **Error handling**: Gracefully handles missing files and failed submissions
+
+### Generated Files
+
+For each mutation, the script creates:
+
+1. **strip_traj_{mutation}.in** - cpptraj input file for trajectory stripping
+2. **strip_traj_{mutation}.sh** - SLURM batch script for job submission
+3. **AF-{mutation}_solv_gbsa_750.nc** - Output stripped NetCDF file (created by cpptraj)
+4. **strip_{mutation}.log** - cpptraj execution log
+5. **strip_{mutation}.out** - SLURM stdout output
+6. **strip_{mutation}.err** - SLURM stderr output
+
+### Example Output
+
+```
+================================================================================
+Trajectory Stripping Script
+================================================================================
+Searching for mutation directories from: /home/user/project
+Frame range to extract: 825-850 (inclusive)
+--------------------------------------------------------------------------------
+Found 2 mutation directories:
+  - /home/user/project/Q94R/analysis/gbsa (mutation: Q94R)
+  - /home/user/project/WT/analysis/gbsa (mutation: WT)
+--------------------------------------------------------------------------------
+
+Processing mutation: Q94R
+  GBSA directory: /home/user/project/Q94R/analysis/gbsa
+  Found topology file: strip.1xjv_POT1_ssDNA-Q94R_wat.prmtop
+  Found trajectory file: 1xjv_POT1_ssDNA-Q94R_wat_imaged_26-1025.nc
+  Trajectory contains 1000 frames
+  Created cpptraj input file: /home/user/project/Q94R/analysis/gbsa/strip_traj_Q94R.in
+  Created SLURM batch script: /home/user/project/Q94R/analysis/gbsa/strip_traj_Q94R.sh
+  Submitted SLURM job: 12345
+  ✓ Successfully set up stripping for Q94R
+
+Processing mutation: WT
+  GBSA directory: /home/user/project/WT/analysis/gbsa
+  Found topology file: strip.1xjv_POT1_ssDNA-WT_wat.prmtop
+  Found trajectory file: 1xjv_POT1_ssDNA-WT_wat_imaged_26-1025.nc
+  Trajectory contains 1000 frames
+  Created cpptraj input file: /home/user/project/WT/analysis/gbsa/strip_traj_WT.in
+  Created SLURM batch script: /home/user/project/WT/analysis/gbsa/strip_traj_WT.sh
+  Submitted SLURM job: 12346
+  ✓ Successfully set up stripping for WT
+
+================================================================================
+SUMMARY
+================================================================================
+
+✓ Successfully submitted 2 job(s):
+  - Q94R: Job ID 12345
+  - WT: Job ID 12346
+
+--------------------------------------------------------------------------------
+TRAJECTORY FRAME COUNTS
+--------------------------------------------------------------------------------
+  Q94R: 1000 total frames in trajectory
+  WT: 1000 total frames in trajectory
+
+================================================================================
+Trajectory stripping script completed!
+================================================================================
+```
+
+### Requirements
+
+- Python 3.6 or higher
+- cpptraj (from AmberTools) must be available for frame counting
+- SLURM workload manager for job submission
+- No external Python dependencies required
