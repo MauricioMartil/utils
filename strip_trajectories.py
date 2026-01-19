@@ -11,6 +11,7 @@ of frames in each trajectory.
 import os
 import sys
 import subprocess
+import traceback
 from pathlib import Path
 
 
@@ -250,7 +251,7 @@ def find_trajectory_files(gbsa_path, mutation):
         matches = list(gbsa_path.glob(pattern))
         if matches:
             # Filter out the output file we'll create
-            matches = [m for m in matches if 'AF-' not in m.name and 'gbsa' in m.name or 'imaged' in m.name]
+            matches = [m for m in matches if 'AF-' not in m.name and ('gbsa' in m.name or 'imaged' in m.name)]
             if matches:
                 nc_file = matches[0]
                 break
@@ -377,6 +378,5 @@ if __name__ == '__main__':
         sys.exit(130)
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
-        import traceback
         traceback.print_exc()
         sys.exit(1)
