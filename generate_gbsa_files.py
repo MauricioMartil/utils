@@ -13,20 +13,30 @@ import sys
 from pathlib import Path
 
 
-# File templates
-FILE_TEMPLATES = {
-    'pt-strip-Q94R.in': """parm ./strip.1xjv_POT1_ssDNA-Q94R_wat.prmtop
+# File templates - use {mutation} as placeholder for directory name
+def get_file_templates(mutation):
+    """
+    Get file templates with the mutation name substituted.
+    
+    Args:
+        mutation: The mutation name (parent directory name)
+    
+    Returns:
+        Dictionary of filename: content pairs
+    """
+    return {
+        f'pt-strip-{mutation}.in': f"""parm ./strip.1xjv_POT1_ssDNA-{mutation}_wat.prmtop
 
-trajin 1xjv_POT1_ssDNA-Q94R_wat_imaged_26-1025.nc
+trajin 1xjv_POT1_ssDNA-{mutation}_wat_imaged_26-1025.nc
 
 autoimage origin
 strip :WAT,K+
 
-trajout 1xjv_POT1_ssDNA_Q94R_wat_MMPBSA_26-1025.nc netcdf
+trajout 1xjv_POT1_ssDNA_{mutation}_wat_MMPBSA_26-1025.nc netcdf
 run
 """,
-    
-    'pt-parmstrip_rec.in': """parm ./strip.1xjv_POT1_ssDNA-Q94R_wat.prmtop
+        
+        'pt-parmstrip_rec.in': f"""parm ./strip.1xjv_POT1_ssDNA-{mutation}_wat.prmtop
 
 parmstrip :WAT,K+
 parmstrip :295-304
@@ -34,8 +44,8 @@ parmstrip :295-304
 parmwrite out rec.prmtop
 
 """,
-    
-    'pt-parmstrip_lig.in': """parm ./strip.1xjv_POT1_ssDNA-Q94R_wat.prmtop
+        
+        'pt-parmstrip_lig.in': f"""parm ./strip.1xjv_POT1_ssDNA-{mutation}_wat.prmtop
 
 parmstrip :WAT,K+
 parmstrip :1-294
@@ -43,21 +53,24 @@ parmstrip :1-294
 parmwrite out lig.prmtop
 
 """,
-    
-    'pt-parmstrip_com.in': """parm ./strip.1xjv_POT1_ssDNA-Q94R_wat.prmtop
+        
+        'pt-parmstrip_com.in': f"""parm ./strip.1xjv_POT1_ssDNA-{mutation}_wat.prmtop
 
 parmstrip :WAT,K+
 
 parmwrite out com.prmtop
 
 """,
-    
-    'MM-GBSA.sh': """#!/bin/bash
+        
+        'MM-GBSA.sh': f"""#!/bin/bash
 #SBATCH --job-name=mmpbsa
 #SBATCH --output=mmpbsa.out       
 #SBATCH --error=mmpbsa.err
 #SBATCH --nodes=1
-#SBATCH --mem=6G
+#SBATCH --ntasks=4
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=16G
+#SBATCH --oversubscribe
 #SBATCH --partition=cisneros
 #SBATCH --nodelist=g-02-04
 
@@ -71,11 +84,11 @@ module list
 #cpptraj -i pt-parmstrip_tox.in > pt-parmstrip_tox.log
 #cpptraj -i pt-parmstrip_anti.in > pt-parmstrip_anti.log
 
-mpirun -np 1 MMPBSA.py.MPI -O -i MM-GBSA.in -o mmgbsa.dat -cp com.prmtop -rp rec.prmtop -lp lig.prmtop -y 1xjv_POT1_ssDNA_Q94R_wat_MMPBSA_26-1025.nc > mmgbsa.log
+mpirun -np 4 MMPBSA.py.MPI -O -i MM-GBSA.in -o mmgbsa.dat -cp com.prmtop -rp rec.prmtop -lp lig.prmtop -y 1xjv_POT1_ssDNA_{mutation}_wat_MMPBSA_26-1025.nc > mmgbsa.log
 
 """,
-    
-    'MM-GBSA.in': """&general
+        
+        'MM-GBSA.in': """&general
    startframe=167500,
    endframe=177500,
    interval=1,
@@ -92,7 +105,7 @@ mpirun -np 1 MMPBSA.py.MPI -O -i MM-GBSA.in -o mmgbsa.dat -cp com.prmtop -rp rec
   saltcon=0.150,
 /
 """
-}
+    }
 
 
 def find_analysis_directories(start_path='.'):
@@ -103,7 +116,8 @@ def find_analysis_directories(start_path='.'):
         start_path: The starting directory for the search (default: current directory)
     
     Returns:
-        List of Path objects representing directories containing 'analysis' subdirectory
+        List of tuples (analysis_path, parent_dir_name) where parent_dir_name is the name
+        of the directory containing the 'analysis' subdirectory
     """
     analysis_dirs = []
     start_path = Path(start_path).resolve()
@@ -111,8 +125,10 @@ def find_analysis_directories(start_path='.'):
     # Walk through the directory tree
     for root, dirs, files in os.walk(start_path):
         if 'analysis' in dirs:
-            analysis_path = Path(root) / 'analysis'
-            analysis_dirs.append(analysis_path)
+            parent_path = Path(root)
+            analysis_path = parent_path / 'analysis'
+            parent_dir_name = parent_path.name
+            analysis_dirs.append((analysis_path, parent_dir_name))
     
     return analysis_dirs
 
@@ -138,14 +154,17 @@ def create_gbsa_directory(analysis_path):
     return gbsa_path
 
 
-def generate_files(gbsa_path):
+def generate_files(gbsa_path, mutation):
     """
     Generate all required files in the 'gbsa' directory.
     
     Args:
         gbsa_path: Path to the 'gbsa' directory
+        mutation: The mutation name (parent directory name)
     """
-    for filename, content in FILE_TEMPLATES.items():
+    file_templates = get_file_templates(mutation)
+    
+    for filename, content in file_templates.items():
         file_path = gbsa_path / filename
         
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -174,20 +193,20 @@ def main():
         return 0
     
     print(f"Found {len(analysis_dirs)} 'analysis' director{'y' if len(analysis_dirs) == 1 else 'ies'}:")
-    for analysis_path in analysis_dirs:
-        print(f"  - {analysis_path}")
+    for analysis_path, parent_dir_name in analysis_dirs:
+        print(f"  - {analysis_path} (mutation: {parent_dir_name})")
     
     print("-" * 80)
     
     # Process each 'analysis' directory
-    for analysis_path in analysis_dirs:
-        print(f"\nProcessing: {analysis_path}")
+    for analysis_path, parent_dir_name in analysis_dirs:
+        print(f"\nProcessing: {analysis_path} (mutation: {parent_dir_name})")
         
         # Create 'gbsa' subdirectory
         gbsa_path = create_gbsa_directory(analysis_path)
         
-        # Generate files
-        generate_files(gbsa_path)
+        # Generate files with mutation name
+        generate_files(gbsa_path, parent_dir_name)
     
     print("-" * 80)
     print("GBSA file generation completed successfully!")
